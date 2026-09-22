@@ -1,0 +1,47 @@
+---
+env_name: entw
+
+kafka_version: "3.7.2"
+kafka_scala_version: "2.13"
+kafka_mirror_url: "https://nexus.example.local/repository/generic-hosted/kafka/kafka_2.13-3.7.2.tgz"
+
+zookeeper_version: "3.9.2"
+zookeeper_mirror_url: "https://nexus.example.local/repository/generic-hosted/zookeeper/apache-zookeeper-3.9.2-bin.tar.gz"
+
+kafka_install_dir: /opt/kafka
+kafka_java_home: /usr/lib/jvm/jre-17-openjdk
+
+zookeeper_install_dir: /opt/zookeeper
+zookeeper_java_home: /usr/lib/jvm/jre-17-openjdk
+
+kafka_ssl_keystore_location: /etc/kafka/ssl/kafka.keystore.jks
+kafka_ssl_keystore_password: "CHANGE-ME"
+kafka_ssl_key_password: "CHANGE-ME"
+kafka_ssl_truststore_location: /etc/kafka/ssl/kafka.truststore.jks
+kafka_ssl_truststore_password: "CHANGE-ME"
+kafka_ssl_client_auth: required
+
+zookeeper_tls_enabled: true
+zookeeper_ssl_keystore_location: /etc/zookeeper/ssl/zookeeper.keystore.jks
+zookeeper_ssl_keystore_password: "CHANGE-ME"
+zookeeper_ssl_truststore_location: /etc/zookeeper/ssl/zookeeper.truststore.jks
+zookeeper_ssl_truststore_password: "CHANGE-ME"
+zookeeper_ssl_client_auth: need
+
+kafka_sasl_mechanism: PLAIN
+kafka_inter_broker_username: admin
+kafka_inter_broker_password: "CHANGE-ME"
+kafka_jaas_users:
+  monitoring: "CHANGE-ME"
+  client: "CHANGE-ME"
+kafka_super_users: "User:admin"
+
+zookeeper_sasl_enabled: true
+zookeeper_kafka_sasl_username: kafka
+zookeeper_kafka_sasl_password: "CHANGE-ME"
+
+# Nur ein Broker/ein ZK-Node in entw - Replikation entsprechend auf 1 reduziert.
+kafka_num_partitions: 3
+kafka_default_replication_factor: 1
+kafka_min_insync_replicas: 1
+kafka_log_retention_hours: 24
