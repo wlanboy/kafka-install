@@ -6,11 +6,6 @@ Docker-Container), gestartet jeweils als systemd User-Unit (`systemctl --user`)
 des `ansible_user` bzw. eines dedizierten Service-Users. TLS und SASL/PLAIN sind
 von Anfang an aktiv.
 
-Struktur und Vorgehen orientieren sich an [kafka-config](../kafka-config) (dort
-insbesondere `kminion.yml`: Download vom Nexus-Mirror, Lingering, systemd
-User-Unit). Das JAAS-/SASL-Format folgt [kafka-config/files/kafka_server_jaas.conf](../kafka-config/files/kafka_server_jaas.conf)
-und [kafka_mirror/secrets/kafka_server_jaas.conf](../kafka_mirror/secrets/kafka_server_jaas.conf).
-
 `kafka-config` überschreibt gezielt einzelne Werte in einer bereits vorhandenen
 `/etc/kafka/server.properties`. Dieses Repo macht dagegen die Erstinstallation
 (Binary, vollständige Config, Service). Auf einer frisch damit installierten VM
