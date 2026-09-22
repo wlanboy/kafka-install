@@ -1,0 +1,19 @@
+[Unit]
+Description=Apache Kafka Broker ({{ env_name }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=JAVA_HOME={{ kafka_java_home }}
+Environment=KAFKA_HEAP_OPTS={{ kafka_heap_opts }}
+Environment=KAFKA_OPTS=-Djava.security.auth.login.config={{ kafka_jaas_conf_path }}
+WorkingDirectory={{ kafka_install_dir }}
+ExecStart={{ kafka_install_dir }}/bin/kafka-server-start.sh {{ kafka_config_path }}
+ExecStop={{ kafka_install_dir }}/bin/kafka-server-stop.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

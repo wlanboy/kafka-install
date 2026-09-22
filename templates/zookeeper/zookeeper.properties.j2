@@ -1,0 +1,36 @@
+#####################################################################################
+# ZooKeeper Konfiguration - gerendert von install-zookeeper.yml fuer Environment:
+# {{ env_name }} (zookeeper_id/myid={{ zookeeper_id }}, Host: {{ inventory_hostname }})
+#####################################################################################
+
+tickTime={{ zookeeper_tick_time | default(2000) }}
+initLimit={{ zookeeper_init_limit | default(10) }}
+syncLimit={{ zookeeper_sync_limit | default(5) }}
+dataDir={{ zookeeper_data_dir }}
+
+clientPort={{ zookeeper_client_port | default(2181) }}
+{% if zookeeper_tls_enabled | default(true) | bool %}
+############################# TLS #############################
+secureClientPort={{ zookeeper_secure_client_port | default(2182) }}
+serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
+ssl.keyStore.location={{ zookeeper_ssl_keystore_location }}
+ssl.keyStore.password={{ zookeeper_ssl_keystore_password }}
+ssl.trustStore.location={{ zookeeper_ssl_truststore_location }}
+ssl.trustStore.password={{ zookeeper_ssl_truststore_password }}
+ssl.clientAuth={{ zookeeper_ssl_client_auth | default('need') }}
+{% endif %}
+{% if zookeeper_sasl_enabled | default(true) | bool %}
+############################# SASL #############################
+authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+requireClientAuthScheme=sasl
+jaasLoginRenew=3600000
+{% endif %}
+############################# Ensemble #############################
+# Ein server.X-Eintrag pro Host aus der [zookeeper]-Inventory-Gruppe, X = zookeeper_id
+# (Host-Variable in inventory/{{ env_name }}/hosts.ini).
+{% for host in groups['zookeeper'] %}
+server.{{ hostvars[host].zookeeper_id }}={{ hostvars[host].ansible_host | default(host) }}:2888:3888
+{%- endfor %}
+
+autopurge.snapRetainCount=5
+autopurge.purgeInterval=24

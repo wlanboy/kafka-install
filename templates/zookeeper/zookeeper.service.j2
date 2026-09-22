@@ -1,0 +1,19 @@
+[Unit]
+Description=Apache ZooKeeper ({{ env_name }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=JAVA_HOME={{ zookeeper_java_home }}
+{% if zookeeper_sasl_enabled | default(true) | bool -%}
+Environment=SERVER_JVMFLAGS=-Djava.security.auth.login.config={{ zookeeper_jaas_conf_path }}
+{% endif -%}
+WorkingDirectory={{ zookeeper_install_dir }}
+ExecStart={{ zookeeper_install_dir }}/bin/zkServer.sh start-foreground {{ zookeeper_config_path }}
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

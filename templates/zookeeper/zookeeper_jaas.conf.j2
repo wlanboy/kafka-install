@@ -1,0 +1,14 @@
+// JAAS-Login-Config fuer SASL (DIGEST-MD5) - gerendert von install-zookeeper.yml.
+//
+// Server: ZooKeeper prueft eingehende SASL-Verbindungen (u. a. vom Kafka-Broker,
+//         siehe Client{}-Block in kafka_server_jaas.conf) gegen diese User-Liste.
+Server {
+   org.apache.zookeeper.server.auth.DigestLoginModule required
+{%- set user_lines = [] %}
+{%- for user, password in zookeeper_sasl_users.items() %}
+{%- set _ = user_lines.append('user_' + user + '="' + password + '"') %}
+{%- endfor %}
+{% for line in user_lines %}
+   {{ line }}{{ ';' if loop.last else '' }}
+{%- endfor %}
+};

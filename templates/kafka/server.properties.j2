@@ -1,0 +1,59 @@
+#####################################################################################
+# Kafka Broker Konfiguration - gerendert von install-kafka.yml fuer Environment:
+# {{ env_name }} (broker.id={{ kafka_broker_id }}, Host: {{ inventory_hostname }})
+#
+# Listener ausschliesslich SASL_SSL (TLS + SASL/{{ kafka_sasl_mechanism }}).
+# SASL-User siehe {{ kafka_jaas_conf_path }} (kafka_server_jaas.conf.j2).
+#####################################################################################
+
+broker.id={{ kafka_broker_id }}
+
+############################# Listener / TLS / SASL #############################
+
+listeners=SASL_SSL://0.0.0.0:{{ kafka_listener_port }}
+advertised.listeners=SASL_SSL://{{ ansible_host | default(inventory_hostname) }}:{{ kafka_listener_port }}
+listener.security.protocol.map=SASL_SSL:SASL_SSL
+inter.broker.listener.name=SASL_SSL
+security.inter.broker.protocol=SASL_SSL
+
+sasl.enabled.mechanisms={{ kafka_sasl_mechanism }}
+sasl.mechanism.inter.broker.protocol={{ kafka_sasl_mechanism }}
+
+ssl.keystore.location={{ kafka_ssl_keystore_location }}
+ssl.keystore.password={{ kafka_ssl_keystore_password }}
+ssl.key.password={{ kafka_ssl_key_password }}
+ssl.truststore.location={{ kafka_ssl_truststore_location }}
+ssl.truststore.password={{ kafka_ssl_truststore_password }}
+ssl.client.auth={{ kafka_ssl_client_auth }}
+ssl.endpoint.identification.algorithm={{ kafka_ssl_endpoint_identification_algorithm | default('HTTPS') }}
+
+super.users={{ kafka_super_users | default('User:' + kafka_inter_broker_username) }}
+
+############################# ZooKeeper #############################
+
+# Verbindungsstring wird in install-kafka.yml aus der [zookeeper]-Inventory-Gruppe
+# berechnet (Host:Port je Ensemble-Mitglied + Chroot) - siehe kafka_zookeeper_connect.
+zookeeper.connect={{ kafka_zookeeper_connect }}
+zookeeper.session.timeout.ms=18000
+zookeeper.set.acl={{ (zookeeper_sasl_enabled | default(true) | bool) | lower }}
+
+############################# Logs / Storage #############################
+
+log.dirs={{ kafka_log_dirs | default(kafka_data_dir) }}
+num.partitions={{ kafka_num_partitions | default(6) }}
+default.replication.factor={{ kafka_default_replication_factor | default(3) }}
+min.insync.replicas={{ kafka_min_insync_replicas | default(2) }}
+log.retention.hours={{ kafka_log_retention_hours | default(168) }}
+offsets.topic.replication.factor={{ kafka_offsets_topic_replication_factor | default(kafka_default_replication_factor | default(3)) }}
+transaction.state.log.replication.factor={{ kafka_transaction_state_log_replication_factor | default(kafka_default_replication_factor | default(3)) }}
+transaction.state.log.min.isr={{ kafka_transaction_state_log_min_isr | default(kafka_min_insync_replicas | default(2)) }}
+
+############################# Threads / IO #############################
+
+num.network.threads=3
+num.io.threads=8
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+num.recovery.threads.per.data.dir=1
+group.initial.rebalance.delay.ms=0

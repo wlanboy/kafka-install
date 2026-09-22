@@ -1,0 +1,37 @@
+// JAAS-Login-Config fuer SASL/{{ kafka_sasl_mechanism }} - gerendert von install-kafka.yml,
+// Format analog zu kafka-config/files/kafka_server_jaas.conf.
+//
+// KafkaServer: Server-Seite des Brokers (Listener-Auth) - Inter-Broker-User
+//              ({{ kafka_inter_broker_username }}) plus alle Client-User aus
+//              kafka_jaas_users (inventory/{{ env_name }}/group_vars/all.yml).
+// KafkaClient: Wird von Kafka-Bordmitteln (kafka-topics.sh etc.) auf diesem Host
+//              verwendet, falls --command-config nicht explizit eine eigene
+//              Datei angibt.
+{% if zookeeper_sasl_enabled | default(true) | bool -%}
+// Client:      Wird vom Broker selbst benutzt, um sich gegenueber dem
+//              SASL-abgesicherten ZooKeeper-Ensemble zu authentifizieren.
+{% endif -%}
+KafkaServer {
+   org.apache.kafka.common.security.plain.PlainLoginModule required
+   username="{{ kafka_inter_broker_username }}"
+   password="{{ kafka_inter_broker_password }}"
+{%- set user_lines = ['user_' + kafka_inter_broker_username + '="' + kafka_inter_broker_password + '"'] %}
+{%- for user, password in kafka_jaas_users.items() %}
+{%- set _ = user_lines.append('user_' + user + '="' + password + '"') %}
+{%- endfor %}
+{% for line in user_lines %}
+   {{ line }}{{ ';' if loop.last else '' }}
+{%- endfor %}
+};
+KafkaClient {
+   org.apache.kafka.common.security.plain.PlainLoginModule required
+   username="{{ kafka_inter_broker_username }}"
+   password="{{ kafka_inter_broker_password }}";
+};
+{% if zookeeper_sasl_enabled | default(true) | bool %}
+Client {
+   org.apache.zookeeper.server.auth.DigestLoginModule required
+   username="{{ zookeeper_kafka_sasl_username }}"
+   password="{{ zookeeper_kafka_sasl_password }}";
+};
+{% endif %}
