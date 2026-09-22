@@ -1,0 +1,180 @@
+---
+- name: Kafka aus Nexus-Mirror installieren und als User-Unit starten
+  hosts: kafka
+  serial: 1
+  any_errors_fatal: true
+  gather_facts: false
+
+  vars:
+    # Defaults - pro Environment in inventory/<env>/group_vars/all.yml überschreibbar
+    kafka_version: "{{ kafka_version | default('3.7.2') }}"
+    kafka_scala_version: "{{ kafka_scala_version | default('2.13') }}"
+    # URL des Nexus/Artifactory-Mirrors für kafka_<scala-version>-<version>.tgz.
+    # Muss pro Environment gesetzt werden, es gibt bewusst keinen Default.
+    kafka_mirror_url: "{{ kafka_mirror_url | default('') }}"
+    kafka_install_dir: "{{ kafka_install_dir | default('/opt/kafka') }}"
+    kafka_data_dir: "{{ kafka_data_dir | default(kafka_install_dir + '/data') }}"
+    kafka_config_path: "{{ kafka_install_dir + '/config/server.properties' }}"
+    kafka_jaas_conf_path: "{{ kafka_install_dir + '/config/kafka_server_jaas.conf' }}"
+    # User, unter dem die systemd User-Unit läuft. Default: der SSH-Login-User.
+    kafka_service_user: "{{ kafka_service_user | default(ansible_user) }}"
+    kafka_java_home: "{{ kafka_java_home | default('/usr/lib/jvm/jre-17-openjdk') }}"
+    kafka_heap_opts: "{{ kafka_heap_opts | default('-Xms1g -Xmx1g') }}"
+    kafka_listener_port: "{{ kafka_listener_port | default(9093) }}"
+    kafka_sasl_mechanism: "{{ kafka_sasl_mechanism | default('PLAIN') }}"
+    # Chroot-Pfad unter dem Kafka im ZooKeeper-Namespace ablegt (erlaubt, dass sich
+    # ein ZK-Ensemble mehrere Kafka-Cluster teilt).
+    kafka_zookeeper_chroot: "{{ kafka_zookeeper_chroot | default('/kafka') }}"
+    kafka_health_check_timeout: "{{ kafka_health_check_timeout | default(60) }}"
+    # Müssen zu den Werten in install-zookeeper.yml / group_vars passen, damit der
+    # berechnete zookeeper.connect-String korrekt ist.
+    zookeeper_client_port: "{{ zookeeper_client_port | default(2181) }}"
+    zookeeper_secure_client_port: "{{ zookeeper_secure_client_port | default(2182) }}"
+    zookeeper_tls_enabled: "{{ zookeeper_tls_enabled | default(true) }}"
+    zookeeper_sasl_enabled: "{{ zookeeper_sasl_enabled | default(true) }}"
+
+  tasks:
+    - name: Prüfen, dass kafka_mirror_url gesetzt ist
+      ansible.builtin.assert:
+        that:
+          - kafka_mirror_url | length > 0
+        fail_msg: >-
+          kafka_mirror_url ist nicht gesetzt. Bitte in
+          inventory/<env>/group_vars/all.yml die URL des Nexus/Artifactory-Mirrors
+          für kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz hinterlegen.
+
+    - name: Prüfen, dass kafka_broker_id für diesen Host gesetzt ist
+      ansible.builtin.assert:
+        that:
+          - kafka_broker_id is defined
+        fail_msg: >-
+          kafka_broker_id ist für {{ inventory_hostname }} nicht gesetzt. Bitte als
+          Host-Variable in inventory/<env>/hosts.ini ergänzen (siehe [kafka]-Gruppe).
+
+    - name: Prüfen, dass die zookeeper-Gruppe im Inventory nicht leer ist
+      ansible.builtin.assert:
+        that:
+          - groups['zookeeper'] | default([]) | length > 0
+        fail_msg: >-
+          Die [zookeeper]-Gruppe im Inventory ist leer. Kafka braucht ein bereits
+          (oder in derselben Umgebung parallel, siehe README.md) mit
+          install-zookeeper.yml installiertes ZooKeeper-Ensemble.
+
+    - name: ZooKeeper-Connect-String aus der zookeeper-Gruppe berechnen
+      ansible.builtin.set_fact:
+        kafka_zookeeper_connect: "{% for host in groups['zookeeper'] %}{{ hostvars[host].ansible_host | default(host) }}:{{ zk_port }}{{ ',' if not loop.last else '' }}{% endfor %}{{ kafka_zookeeper_chroot }}"
+      vars:
+        zk_port: "{{ zookeeper_secure_client_port if (zookeeper_tls_enabled | bool) else zookeeper_client_port }}"
+
+    - name: Passwd-Eintrag ermitteln (Home-Verzeichnis, UID) für {{ kafka_service_user }}
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ kafka_service_user }}"
+
+    - name: Home-Verzeichnis und UID als Facts setzen
+      ansible.builtin.set_fact:
+        kafka_home: "{{ getent_passwd[kafka_service_user][4] }}"
+        kafka_uid: "{{ getent_passwd[kafka_service_user][1] }}"
+
+    - name: Installationsverzeichnis anlegen unter {{ kafka_install_dir }}
+      become: true
+      ansible.builtin.file:
+        path: "{{ kafka_install_dir }}"
+        state: directory
+        owner: "{{ kafka_service_user }}"
+        group: "{{ kafka_service_user }}"
+        mode: "0755"
+
+    - name: Datenverzeichnis (log.dirs) anlegen unter {{ kafka_data_dir }}
+      become: true
+      ansible.builtin.file:
+        path: "{{ kafka_data_dir }}"
+        state: directory
+        owner: "{{ kafka_service_user }}"
+        group: "{{ kafka_service_user }}"
+        mode: "0750"
+
+    - name: Kafka-Archiv vom Mirror herunterladen und entpacken nach {{ kafka_install_dir }}
+      become: true
+      become_user: "{{ kafka_service_user }}"
+      ansible.builtin.unarchive:
+        src: "{{ kafka_mirror_url }}"
+        dest: "{{ kafka_install_dir }}"
+        remote_src: true
+        extra_opts:
+          - "--strip-components=1"
+        mode: "0755"
+      notify: Kafka neu starten
+
+    - name: kafka_server_jaas.conf rendern (SASL-User)
+      become: true
+      become_user: "{{ kafka_service_user }}"
+      ansible.builtin.template:
+        src: "templates/kafka/kafka_server_jaas.conf.j2"
+        dest: "{{ kafka_jaas_conf_path }}"
+        mode: "0640"
+      no_log: true
+      notify: Kafka neu starten
+
+    - name: server.properties rendern nach {{ kafka_config_path }}
+      become: true
+      become_user: "{{ kafka_service_user }}"
+      ansible.builtin.template:
+        src: "templates/kafka/server.properties.j2"
+        dest: "{{ kafka_config_path }}"
+        mode: "0640"
+      notify: Kafka neu starten
+
+    - name: Lingering aktivieren für {{ kafka_service_user }}
+      become: true
+      ansible.builtin.command:
+        cmd: "loginctl enable-linger {{ kafka_service_user }}"
+      register: kafka_linger
+      changed_when: "'Cannot' not in (kafka_linger.stderr | default(''))"
+
+    - name: Verzeichnis für systemd User-Units anlegen
+      become: true
+      become_user: "{{ kafka_service_user }}"
+      ansible.builtin.file:
+        path: "{{ kafka_home }}/.config/systemd/user"
+        state: directory
+        mode: "0755"
+
+    - name: Kafka User-Unit rendern
+      become: true
+      become_user: "{{ kafka_service_user }}"
+      ansible.builtin.template:
+        src: "templates/kafka/kafka.service.j2"
+        dest: "{{ kafka_home }}/.config/systemd/user/kafka.service"
+        mode: "0644"
+      notify: Kafka neu starten
+
+    - name: Kafka User-Service aktivieren und starten
+      become: true
+      become_user: "{{ kafka_service_user }}"
+      ansible.builtin.systemd:
+        name: kafka.service
+        scope: user
+        daemon_reload: true
+        enabled: true
+        state: started
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ kafka_uid }}"
+
+    - name: Auf Kafka-Listener-Port warten (Health-Check)
+      ansible.builtin.wait_for:
+        port: "{{ kafka_listener_port }}"
+        host: "{{ ansible_host | default(inventory_hostname) }}"
+        timeout: "{{ kafka_health_check_timeout }}"
+
+  handlers:
+    - name: Kafka neu starten
+      become: true
+      become_user: "{{ kafka_service_user }}"
+      ansible.builtin.systemd:
+        name: kafka.service
+        scope: user
+        daemon_reload: true
+        state: restarted
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ kafka_uid }}"
