@@ -1,0 +1,13 @@
+# Lokales Referenzmaterial (tar.gz-Downloads zum Testen) - Binaries kommen zur
+# Laufzeit ausschliesslich vom Nexus/Artifactory-Mirror, siehe README.md.
+files/
+*.tar.gz
+*.tgz
+
+# Keystores/Truststores duerfen nie ins Repo - die Playbooks erwarten sie bereits
+# auf den Ziel-VMs (siehe kafka_ssl_*/zookeeper_ssl_* in group_vars/all.yml).
+*.jks
+*.p12
+*.pem
+*.key
+*.crt
